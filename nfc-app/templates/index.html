@@ -96,6 +96,17 @@
             margin: 0;
             padding-left: 20px;
         }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .reset-button {
+            background-color: #dc3545;
+        }
+        .reset-button:hover {
+            background-color: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -112,7 +123,10 @@
                 <label for="number">Start Number:</label>
                 <input type="number" id="number" value="{{ current_number }}" placeholder="Enter start number">
             </div>
-            <button onclick="updateConfig()">Update Configuration</button>
+            <div class="button-group">
+                <button onclick="updateConfig()">Update Configuration</button>
+                <button onclick="resetReader()" class="reset-button">Reset NFC Reader</button>
+            </div>
         </div>
 
         <div class="info-panel">
@@ -199,6 +213,20 @@
             .catch(error => {
                 console.error('Error:', error);
                 showStatus('Error updating configuration', 'error');
+            });
+        }
+
+        function resetReader() {
+            fetch('/reset-reader', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                showStatus('NFC reader reset initiated', 'success');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus('Error resetting NFC reader', 'error');
             });
         }
 

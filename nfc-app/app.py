@@ -182,6 +182,21 @@ def update_prefix():
         "number": current_number
     })
 
+@app.route('/reset-reader', methods=['POST'])
+def reset_reader():
+    """Endpoint to manually trigger NFC reader reset."""
+    try:
+        reset_nfc_reader()
+        return jsonify({
+            "status": "success",
+            "message": "NFC reader reset initiated"
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Start the watchdog thread
     threading.Thread(target=watchdog_thread, daemon=True).start()
