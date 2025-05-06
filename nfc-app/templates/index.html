@@ -1,21 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>NFC Serial Number Writer</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC Product Writer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            text-align: center;
+            background-color: #f5f5f5;
         }
-        .serial-display {
-            font-size: 36px;
-            margin: 20px 0;
-            color: #4CAF50;
-            font-family: monospace;
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-panel {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
         }
         .status {
             margin-top: 20px;
@@ -23,119 +56,121 @@
             border-radius: 4px;
         }
         .success {
-            background-color: #dff0d8;
-            color: #3c763d;
+            background-color: #d4edda;
+            color: #155724;
         }
         .error {
-            background-color: #f2dede;
-            color: #a94442;
+            background-color: #f8d7da;
+            color: #721c24;
         }
-        .info {
-            background-color: #d9edf7;
-            color: #31708f;
-            margin-bottom: 20px;
+        .info-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 6px;
+        }
+        .product-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .product-info h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .product-info p {
+            margin: 5px 0;
         }
         .instructions {
-            text-align: left;
-            margin: 20px 0;
+            margin-top: 20px;
             padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+            background-color: #e9ecef;
+            border-radius: 6px;
         }
-        .config-panel {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            text-align: left;
+        .instructions h3 {
+            margin-top: 0;
         }
-        .form-group {
-            margin: 10px 0;
-        }
-        label {
-            display: inline-block;
-            width: 150px;
-            text-align: right;
-            margin-right: 10px;
-        }
-        input {
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            width: 200px;
-        }
-        button {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 14px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .url-display {
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            font-family: monospace;
-            word-break: break-all;
+        .instructions ol {
+            margin: 0;
+            padding-left: 20px;
         }
     </style>
 </head>
 <body>
-    <h1>NFC Serial Number Writer</h1>
-    
-    <div class="config-panel">
-        <h3>Configuration</h3>
-        <div class="form-group">
-            <label for="prefix">Serial Prefix:</label>
-            <input type="text" id="prefix" value="{{ serial_prefix }}" placeholder="e.g., A451">
+    <div class="container">
+        <h1>NFC Product Writer</h1>
+        
+        <div class="config-panel">
+            <h2>Configuration</h2>
+            <div class="form-group">
+                <label for="prefix">Serial Prefix:</label>
+                <input type="text" id="prefix" value="{{ serial_prefix }}" placeholder="Enter serial prefix">
+            </div>
+            <div class="form-group">
+                <label for="number">Start Number:</label>
+                <input type="number" id="number" value="{{ current_number }}" placeholder="Enter start number">
+            </div>
+            <button onclick="updateConfig()">Update Configuration</button>
         </div>
-        <div class="form-group">
-            <label for="number">Start Number:</label>
-            <input type="number" id="number" value="{{ current_number }}" min="0">
-        </div>
-        <button onclick="updateConfig()">Update Configuration</button>
-    </div>
 
-    <div class="serial-display" id="current-serial">A451000000</div>
-    <div class="url-display" id="current-url">http://10.207.24.120/test?serialnumber=A451000000</div>
-    
-    <div class="instructions">
-        <h3>Instructions:</h3>
-        <ol>
-            <li>Configure the serial number prefix and starting number above</li>
-            <li>Touch an NFC card to the reader</li>
-            <li>The next serial number will be written to the card</li>
-            <li>The card will contain both the serial number and the URL</li>
-        </ol>
+        <div class="info-panel">
+            <h2>Current Information</h2>
+            <div class="product-info">
+                <h3>Serial Number</h3>
+                <p id="serial-display">Loading...</p>
+                
+                <h3>Product Data</h3>
+                <p><strong>Manufacture Date:</strong> <span id="manufacture-date">-</span></p>
+                <p><strong>Work Order:</strong> <span id="work-order">-</span></p>
+                <p><strong>Batch:</strong> <span id="batch">-</span></p>
+                <p><strong>Product Type:</strong> <span id="product-type">-</span></p>
+                <p><strong>Version:</strong> <span id="version">-</span></p>
+                
+                <h3>URL</h3>
+                <p id="url-display">Loading...</p>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>Instructions</h3>
+            <ol>
+                <li>Configure the serial number prefix and starting number</li>
+                <li>Click "Update Configuration" to save settings</li>
+                <li>Touch an NFC card to the reader</li>
+                <li>The card will be written with the product information and URL</li>
+            </ol>
+        </div>
+
+        <div id="status" class="status" style="display: none;"></div>
     </div>
-    
-    <div class="status info" id="status">Waiting for NFC card...</div>
 
     <script>
         function updateSerialDisplay() {
             fetch('/get-current-serial')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('current-serial').textContent = data.serial;
-                    document.getElementById('current-url').textContent = 
-                        `{{ base_url }}?serialnumber=${data.serial}`;
+                    document.getElementById('serial-display').textContent = data.serial;
+                    document.getElementById('url-display').textContent = `${data.product_data.url}?serial=${data.serial}&wo=${data.product_data.work_order}&batch=${data.product_data.batch}`;
+                    
+                    // Update product data
+                    document.getElementById('manufacture-date').textContent = data.product_data.manufacture_date;
+                    document.getElementById('work-order').textContent = data.product_data.work_order;
+                    document.getElementById('batch').textContent = data.product_data.batch;
+                    document.getElementById('product-type').textContent = data.product_data.product_type;
+                    document.getElementById('version').textContent = data.product_data.version;
                 })
                 .catch(error => {
                     console.error('Error:', error);
+                    showStatus('Error updating display', 'error');
                 });
         }
 
         function updateConfig() {
             const prefix = document.getElementById('prefix').value;
             const number = parseInt(document.getElementById('number').value);
-            
+
             fetch('/update-prefix', {
                 method: 'POST',
                 headers: {
@@ -148,16 +183,27 @@
             })
             .then(response => response.json())
             .then(data => {
+                showStatus('Configuration updated successfully', 'success');
                 updateSerialDisplay();
             })
             .catch(error => {
                 console.error('Error:', error);
+                showStatus('Error updating configuration', 'error');
             });
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
         }
 
         // Update display every second
         setInterval(updateSerialDisplay, 1000);
-        
         // Initial update
         updateSerialDisplay();
     </script>
