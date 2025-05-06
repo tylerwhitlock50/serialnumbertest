@@ -166,6 +166,9 @@ def on_connect(tag):
 def nfc_reader_thread():
     """Continuously open/close the reader; write one tag per session."""
     global reader_active
+    consecutive_errors = 0
+    max_consecutive_errors = 3
+    
     while True:
         clf = None
         try:
@@ -174,6 +177,7 @@ def nfc_reader_thread():
             logger.info("Reader connected! Tap a tag to write.")
             reader_active = True
             update_activity()
+            consecutive_errors = 0  # Reset error counter on successful connection
             
             while True:
                 try:
@@ -193,15 +197,30 @@ def nfc_reader_thread():
                     continue
                 except Exception as e:
                     logger.error(f"Error during tag operation: {str(e)}")
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.warning("Too many consecutive errors, attempting reader reset...")
+                        reset_nfc_reader()
+                        consecutive_errors = 0
                     time.sleep(0.5)
                     continue
         except IOError as e:
             logger.warning(f"No reader found or device error: {str(e)}")
             reader_active = False
+            consecutive_errors += 1
+            if consecutive_errors >= max_consecutive_errors:
+                logger.warning("Too many consecutive errors, attempting reader reset...")
+                reset_nfc_reader()
+                consecutive_errors = 0
             time.sleep(1)
         except Exception as e:
             logger.error(f"Unexpected NFC error: {str(e)}")
             reader_active = False
+            consecutive_errors += 1
+            if consecutive_errors >= max_consecutive_errors:
+                logger.warning("Too many consecutive errors, attempting reader reset...")
+                reset_nfc_reader()
+                consecutive_errors = 0
             time.sleep(1)
         finally:
             if clf:
