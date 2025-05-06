@@ -60,7 +60,7 @@ def reset_nfc_reader():
         # Method 1: Try usbreset with the correct device ID
         subprocess.run(['sudo', 'usbreset', '072f:2200'], check=False)
         logger.debug("NFC reader hardware reset attempted via usbreset")
-        time.sleep(3)  # Increased delay after usbreset
+        time.sleep(10)  # Increased to 10 seconds after usbreset
 
         # Method 2: Try to reset via libusb if available
         try:
@@ -72,7 +72,7 @@ def reset_nfc_reader():
                 # Reset the device
                 device.reset()
                 logger.debug("NFC reader hardware reset attempted via libusb")
-                time.sleep(3)  # Increased delay after libusb reset
+                time.sleep(10)  # Increased to 10 seconds after libusb reset
         except ImportError:
             logger.debug("libusb not available, skipping libusb reset method")
         except Exception as e:
@@ -81,10 +81,10 @@ def reset_nfc_reader():
         # Method 3: Try to reset via udev if available
         try:
             subprocess.run(['sudo', 'udevadm', 'trigger', '--action=remove', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
-            time.sleep(2)  # Increased delay after remove
+            time.sleep(5)  # Increased to 5 seconds after remove
             subprocess.run(['sudo', 'udevadm', 'trigger', '--action=add', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
             logger.debug("NFC reader hardware reset attempted via udev")
-            time.sleep(3)  # Increased delay after add
+            time.sleep(10)  # Increased to 10 seconds after add
         except Exception as e:
             logger.debug(f"udev reset failed: {str(e)}")
 
@@ -98,7 +98,7 @@ def watchdog_thread():
     """Monitor NFC reader activity and reset if necessary."""
     global last_activity_time, reader_active
     while True:
-        time.sleep(5)  # Check every 5 seconds
+        time.sleep(10)  # Check every 10 seconds instead of 5
         if reader_active and (time.time() - last_activity_time) > WATCHDOG_TIMEOUT:
             logger.warning("Watchdog: NFC reader appears stuck, attempting reset...")
             reset_nfc_reader()
@@ -136,7 +136,7 @@ def on_connect(tag):
     if not tag.ndef:
         logger.warning("Tag is not NDEF or not writable")
         reader_active = False
-        time.sleep(1)  # Added delay after failed write
+        time.sleep(5)  # Increased to 5 seconds after failed write
         return False
 
     try:
@@ -149,8 +149,8 @@ def on_connect(tag):
             f"&batch={data['batch']}"
         )
 
-        # Add a small delay before writing
-        time.sleep(0.5)
+        # Add a longer delay before writing
+        time.sleep(2)
 
         tag.ndef.records = [
             ndef.UriRecord(url),
@@ -161,12 +161,12 @@ def on_connect(tag):
         logger.info(f"Successfully wrote Serial: {serial}")
         logger.debug(f"Payload: {json.dumps(data, indent=2)}")
         reader_active = False
-        time.sleep(2)  # Added delay after successful write
+        time.sleep(10)  # Increased to 10 seconds after successful write
         return True
     except Exception as e:
         logger.error(f"Write failed: {str(e)}")
         reader_active = False
-        time.sleep(1)  # Added delay after error
+        time.sleep(5)  # Increased to 5 seconds after error
         return False
 
 def nfc_reader_thread():
@@ -179,7 +179,7 @@ def nfc_reader_thread():
         clf = None
         try:
             logger.info("Looking for NFC reader...")
-            time.sleep(1)  # Added delay before connecting
+            time.sleep(5)  # Increased to 5 seconds before connecting
             clf = nfc.ContactlessFrontend('usb')
             logger.info("Reader connected! Tap a tag to write.")
             reader_active = True
@@ -197,10 +197,10 @@ def nfc_reader_thread():
                         terminate=lambda: False
                     )
                     logger.debug("Tag done—remove it to scan the next one.")
-                    time.sleep(2)  # Increased delay between reads
+                    time.sleep(10)  # Increased to 10 seconds between reads
                 except nfc.clf.CommunicationError as e:
                     logger.debug(f"Tag removed or communication error: {str(e)}")
-                    time.sleep(1)  # Increased delay after communication error
+                    time.sleep(5)  # Increased to 5 seconds after communication error
                     continue
                 except Exception as e:
                     logger.error(f"Error during tag operation: {str(e)}")
@@ -209,7 +209,7 @@ def nfc_reader_thread():
                         logger.warning("Too many consecutive errors, attempting reader reset...")
                         reset_nfc_reader()
                         consecutive_errors = 0
-                    time.sleep(1)  # Increased delay after error
+                    time.sleep(5)  # Increased to 5 seconds after error
                     continue
         except IOError as e:
             logger.warning(f"No reader found or device error: {str(e)}")
@@ -219,7 +219,7 @@ def nfc_reader_thread():
                 logger.warning("Too many consecutive errors, attempting reader reset...")
                 reset_nfc_reader()
                 consecutive_errors = 0
-            time.sleep(2)  # Increased delay after device error
+            time.sleep(10)  # Increased to 10 seconds after device error
         except Exception as e:
             logger.error(f"Unexpected NFC error: {str(e)}")
             reader_active = False
@@ -228,7 +228,7 @@ def nfc_reader_thread():
                 logger.warning("Too many consecutive errors, attempting reader reset...")
                 reset_nfc_reader()
                 consecutive_errors = 0
-            time.sleep(2)  # Increased delay after unexpected error
+            time.sleep(10)  # Increased to 10 seconds after unexpected error
         finally:
             if clf:
                 try:
@@ -236,7 +236,7 @@ def nfc_reader_thread():
                 except:
                     pass
             reader_active = False
-            time.sleep(1)  # Increased delay after cleanup
+            time.sleep(5)  # Increased to 5 seconds after cleanup
 
 @app.route('/')
 def index():
