@@ -16,7 +16,7 @@ current_number = 0
 def generate_serial_number():
     global current_number
     current_number += 1
-    return f"{SERIAL_PREFIX}{current_number:04d}"  # Pad with zeros
+    return f"{SERIAL_PREFIX}{current_number:06d}"  # Pad with zeros to 6 digits
 
 def create_product_data(serial, work_order=None, batch=None):
     """Build the JSON payload for this product."""
@@ -68,14 +68,19 @@ def nfc_reader_thread():
             with nfc.ContactlessFrontend('usb') as clf:
                 print("Reader connected! Tap a tag to write.")
                 while True:
-                    clf.connect(
-                        rdwr={
-                            'on-connect': on_connect,
-                            'beep-on-connect': True
-                        }
-                    )
-                    print("Tag done—remove it to scan the next one.")
-                    time.sleep(0.5)
+                    try:
+                        clf.connect(
+                            rdwr={
+                                'on-connect': on_connect,
+                                'beep-on-connect': True,
+                                'terminate-after': 1  # Add timeout to prevent hanging
+                            }
+                        )
+                        print("Tag done—remove it to scan the next one.")
+                        time.sleep(0.5)  # Small delay between reads
+                    except nfc.clf.CommunicationError:
+                        print("Tag removed or communication error")
+                        continue
         except nfc.clf.NoSuchDeviceError:
             print("No reader found; retrying in 1s…")
             time.sleep(1)
@@ -94,7 +99,7 @@ def index():
 
 @app.route('/get-current-serial', methods=['GET'])
 def get_current_serial():
-    serial = f"{SERIAL_PREFIX}{current_number:04d}"
+    serial = f"{SERIAL_PREFIX}{current_number:06d}"  # Keep consistent with 6 digits
     data = create_product_data(serial)
     return jsonify({
         "serial": serial,
@@ -107,7 +112,7 @@ def update_prefix():
     global SERIAL_PREFIX, current_number
     payload = request.get_json()
     SERIAL_PREFIX = payload.get('prefix', SERIAL_PREFIX)
-    current_number = payload.get('number', current_number)
+    current_number = int(payload.get('number', current_number))  # Ensure number is an integer
     return jsonify({
         "status": "success",
         "prefix": SERIAL_PREFIX,

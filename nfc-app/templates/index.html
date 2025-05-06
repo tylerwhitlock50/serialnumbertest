@@ -152,7 +152,7 @@
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('serial-display').textContent = data.serial;
-                    document.getElementById('url-display').textContent = `${data.product_data.url}?serial=${data.serial}&wo=${data.product_data.work_order}&batch=${data.product_data.batch}`;
+                    document.getElementById('url-display').textContent = data.product_data.url;
                     
                     // Update product data
                     document.getElementById('manufacture-date').textContent = data.product_data.manufacture_date;
