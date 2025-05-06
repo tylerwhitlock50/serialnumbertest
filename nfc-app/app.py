@@ -7,8 +7,44 @@ import json
 from datetime import datetime
 import subprocess
 import logging
+import os
+from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
+
+# Configure logging
+def setup_logging():
+    # Create logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # Configure root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # File handler for detailed logging
+    file_handler = RotatingFileHandler(
+        'logs/nfc_app.log',
+        maxBytes=1024 * 1024,  # 1MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    # Console handler for important messages only
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    return logger
+
+logger = setup_logging()
 
 # Configuration
 BASE_URL = "http://10.207.24.120/product"
@@ -23,7 +59,7 @@ def reset_nfc_reader():
     try:
         # Method 1: Try usbreset with the correct device ID
         subprocess.run(['sudo', 'usbreset', '072f:2200'], check=False)
-        print("✓ NFC reader hardware reset attempted via usbreset")
+        logger.debug("NFC reader hardware reset attempted via usbreset")
         time.sleep(2)  # Give the device time to reset
 
         # Method 2: Try to reset via libusb if available
@@ -35,27 +71,27 @@ def reset_nfc_reader():
             if device:
                 # Reset the device
                 device.reset()
-                print("✓ NFC reader hardware reset attempted via libusb")
+                logger.debug("NFC reader hardware reset attempted via libusb")
                 time.sleep(2)
         except ImportError:
-            print("→ libusb not available, skipping libusb reset method")
+            logger.debug("libusb not available, skipping libusb reset method")
         except Exception as e:
-            print(f"→ libusb reset failed: {str(e)}")
+            logger.debug(f"libusb reset failed: {str(e)}")
 
         # Method 3: Try to reset via udev if available
         try:
             subprocess.run(['sudo', 'udevadm', 'trigger', '--action=remove', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
             time.sleep(1)
             subprocess.run(['sudo', 'udevadm', 'trigger', '--action=add', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
-            print("✓ NFC reader hardware reset attempted via udev")
+            logger.debug("NFC reader hardware reset attempted via udev")
             time.sleep(2)
         except Exception as e:
-            print(f"→ udev reset failed: {str(e)}")
+            logger.debug(f"udev reset failed: {str(e)}")
 
-        print("✓ Reset sequence completed")
+        logger.info("Reset sequence completed successfully")
         return True
     except Exception as e:
-        print("✗ Hardware reset failed:", str(e))
+        logger.error(f"Hardware reset failed: {str(e)}")
         return False
 
 def watchdog_thread():
@@ -64,7 +100,7 @@ def watchdog_thread():
     while True:
         time.sleep(5)  # Check every 5 seconds
         if reader_active and (time.time() - last_activity_time) > WATCHDOG_TIMEOUT:
-            print("⚠ Watchdog: NFC reader appears stuck, attempting reset...")
+            logger.warning("Watchdog: NFC reader appears stuck, attempting reset...")
             reset_nfc_reader()
             last_activity_time = time.time()
 
@@ -96,9 +132,9 @@ def on_connect(tag):
     reader_active = True
     update_activity()
     
-    print("Tag Detected:", tag)
+    logger.info(f"Tag Detected: {tag}")
     if not tag.ndef:
-        print("→ Not NDEF or not writable.")
+        logger.warning("Tag is not NDEF or not writable")
         reader_active = False
         return False
 
@@ -118,12 +154,12 @@ def on_connect(tag):
             ndef.TextRecord(json.dumps(data))
         ]
 
-        print(f"✓ Written Serial: {serial}")
-        print("  Payload:\n", json.dumps(data, indent=2))
+        logger.info(f"Successfully wrote Serial: {serial}")
+        logger.debug(f"Payload: {json.dumps(data, indent=2)}")
         reader_active = False
         return True
     except Exception as e:
-        print("✗ Write failed:", e)
+        logger.error(f"Write failed: {str(e)}")
         reader_active = False
         return False
 
@@ -133,9 +169,9 @@ def nfc_reader_thread():
     while True:
         clf = None
         try:
-            print("Looking for NFC reader…")
+            logger.info("Looking for NFC reader...")
             clf = nfc.ContactlessFrontend('usb')
-            print("Reader connected! Tap a tag to write.")
+            logger.info("Reader connected! Tap a tag to write.")
             reader_active = True
             update_activity()
             
@@ -149,22 +185,22 @@ def nfc_reader_thread():
                         },
                         terminate=lambda: False
                     )
-                    print("Tag done—remove it to scan the next one.")
+                    logger.debug("Tag done—remove it to scan the next one.")
                     time.sleep(1)
                 except nfc.clf.CommunicationError as e:
-                    print("Tag removed or communication error:", str(e))
+                    logger.debug(f"Tag removed or communication error: {str(e)}")
                     time.sleep(0.5)
                     continue
                 except Exception as e:
-                    print("Error during tag operation:", str(e))
+                    logger.error(f"Error during tag operation: {str(e)}")
                     time.sleep(0.5)
                     continue
         except IOError as e:
-            print("No reader found or device error; retrying in 1s…", str(e))
+            logger.warning(f"No reader found or device error: {str(e)}")
             reader_active = False
             time.sleep(1)
         except Exception as e:
-            print("Unexpected NFC error:", str(e))
+            logger.error(f"Unexpected NFC error: {str(e)}")
             reader_active = False
             time.sleep(1)
         finally:
@@ -209,13 +245,13 @@ def update_config():
         # Update prefix if provided
         if 'prefix' in payload and payload['prefix']:
             SERIAL_PREFIX = str(payload['prefix']).strip()
-            print(f"Updated prefix to: {SERIAL_PREFIX}")
+            logger.info(f"Updated prefix to: {SERIAL_PREFIX}")
 
         # Update number if provided
         if 'number' in payload and payload['number'] is not None:
             try:
                 current_number = int(payload['number'])
-                print(f"Updated current number to: {current_number}")
+                logger.info(f"Updated current number to: {current_number}")
             except ValueError:
                 return jsonify({
                     "status": "error",
@@ -232,7 +268,7 @@ def update_config():
             "test_serial": test_serial
         })
     except Exception as e:
-        print(f"Error updating configuration: {str(e)}")
+        logger.error(f"Error updating configuration: {str(e)}")
         return jsonify({
             "status": "error",
             "message": str(e)
@@ -260,5 +296,5 @@ if __name__ == '__main__':
     # Fire up the NFC thread
     threading.Thread(target=nfc_reader_thread, daemon=True).start()
     
-    print("\nApp running at http://0.0.0.0:5000")
+    logger.info("\nApp running at http://0.0.0.0:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
