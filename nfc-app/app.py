@@ -5,6 +5,8 @@ import time
 import threading
 import json
 from datetime import datetime
+import subprocess
+import logging
 
 app = Flask(__name__)
 
@@ -12,6 +14,34 @@ app = Flask(__name__)
 BASE_URL = "http://10.207.24.120/product"
 SERIAL_PREFIX = "A451"  # Default prefix
 current_number = 0
+WATCHDOG_TIMEOUT = 30  # seconds
+last_activity_time = time.time()
+reader_active = False
+
+def reset_nfc_reader():
+    """Attempt to reset the NFC reader hardware."""
+    try:
+        # Try to reset the USB device (you may need to adjust the device ID)
+        subprocess.run(['sudo', 'usbreset', '0x072f:0x2200'], check=False)
+        print("✓ NFC reader hardware reset attempted")
+        time.sleep(2)  # Give the device time to reset
+    except Exception as e:
+        print("✗ Hardware reset failed:", str(e))
+
+def watchdog_thread():
+    """Monitor NFC reader activity and reset if necessary."""
+    global last_activity_time, reader_active
+    while True:
+        time.sleep(5)  # Check every 5 seconds
+        if reader_active and (time.time() - last_activity_time) > WATCHDOG_TIMEOUT:
+            print("⚠ Watchdog: NFC reader appears stuck, attempting reset...")
+            reset_nfc_reader()
+            last_activity_time = time.time()
+
+def update_activity():
+    """Update the last activity timestamp."""
+    global last_activity_time
+    last_activity_time = time.time()
 
 def generate_serial_number():
     global current_number
@@ -32,9 +62,14 @@ def create_product_data(serial, work_order=None, batch=None):
 
 def on_connect(tag):
     """Called once per tap; return True to end this connect() call."""
+    global reader_active
+    reader_active = True
+    update_activity()
+    
     print("Tag Detected:", tag)
     if not tag.ndef:
         print("→ Not NDEF or not writable.")
+        reader_active = False
         return False
 
     try:
@@ -55,33 +90,37 @@ def on_connect(tag):
 
         print(f"✓ Written Serial: {serial}")
         print("  Payload:\n", json.dumps(data, indent=2))
+        reader_active = False
         return True
     except Exception as e:
         print("✗ Write failed:", e)
+        reader_active = False
         return False
 
 def nfc_reader_thread():
     """Continuously open/close the reader; write one tag per session."""
+    global reader_active
     while True:
         clf = None
         try:
             print("Looking for NFC reader…")
             clf = nfc.ContactlessFrontend('usb')
             print("Reader connected! Tap a tag to write.")
+            reader_active = True
+            update_activity()
             
             while True:
                 try:
-                    # Set a shorter timeout for connection attempts
                     clf.connect(
                         rdwr={
                             'on-connect': on_connect,
                             'beep-on-connect': True,
                             'terminate-after': 1
                         },
-                        terminate=lambda: False  # Don't terminate on timeout
+                        terminate=lambda: False
                     )
                     print("Tag done—remove it to scan the next one.")
-                    time.sleep(1)  # Increased delay between reads
+                    time.sleep(1)
                 except nfc.clf.CommunicationError as e:
                     print("Tag removed or communication error:", str(e))
                     time.sleep(0.5)
@@ -92,18 +131,20 @@ def nfc_reader_thread():
                     continue
         except nfc.clf.NoSuchDeviceError:
             print("No reader found; retrying in 1s…")
+            reader_active = False
             time.sleep(1)
         except Exception as e:
             print("Unexpected NFC error:", str(e))
+            reader_active = False
             time.sleep(1)
         finally:
-            # Ensure proper cleanup of the reader
             if clf:
                 try:
                     clf.close()
                 except:
                     pass
-            time.sleep(0.5)  # Brief pause before reconnecting
+            reader_active = False
+            time.sleep(0.5)
 
 @app.route('/')
 def index():
@@ -142,7 +183,11 @@ def update_prefix():
     })
 
 if __name__ == '__main__':
+    # Start the watchdog thread
+    threading.Thread(target=watchdog_thread, daemon=True).start()
+    
     # Fire up the NFC thread
     threading.Thread(target=nfc_reader_thread, daemon=True).start()
+    
     print("\nApp running at http://0.0.0.0:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
