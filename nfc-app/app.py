@@ -63,30 +63,47 @@ def on_connect(tag):
 def nfc_reader_thread():
     """Continuously open/close the reader; write one tag per session."""
     while True:
+        clf = None
         try:
             print("Looking for NFC reader…")
-            with nfc.ContactlessFrontend('usb') as clf:
-                print("Reader connected! Tap a tag to write.")
-                while True:
-                    try:
-                        clf.connect(
-                            rdwr={
-                                'on-connect': on_connect,
-                                'beep-on-connect': True,
-                                'terminate-after': 1  # Add timeout to prevent hanging
-                            }
-                        )
-                        print("Tag done—remove it to scan the next one.")
-                        time.sleep(0.5)  # Small delay between reads
-                    except nfc.clf.CommunicationError:
-                        print("Tag removed or communication error")
-                        continue
+            clf = nfc.ContactlessFrontend('usb')
+            print("Reader connected! Tap a tag to write.")
+            
+            while True:
+                try:
+                    # Set a shorter timeout for connection attempts
+                    clf.connect(
+                        rdwr={
+                            'on-connect': on_connect,
+                            'beep-on-connect': True,
+                            'terminate-after': 1
+                        },
+                        terminate=lambda: False  # Don't terminate on timeout
+                    )
+                    print("Tag done—remove it to scan the next one.")
+                    time.sleep(1)  # Increased delay between reads
+                except nfc.clf.CommunicationError as e:
+                    print("Tag removed or communication error:", str(e))
+                    time.sleep(0.5)
+                    continue
+                except Exception as e:
+                    print("Error during tag operation:", str(e))
+                    time.sleep(0.5)
+                    continue
         except nfc.clf.NoSuchDeviceError:
             print("No reader found; retrying in 1s…")
             time.sleep(1)
         except Exception as e:
-            print("Unexpected NFC error:", e)
+            print("Unexpected NFC error:", str(e))
             time.sleep(1)
+        finally:
+            # Ensure proper cleanup of the reader
+            if clf:
+                try:
+                    clf.close()
+                except:
+                    pass
+            time.sleep(0.5)  # Brief pause before reconnecting
 
 @app.route('/')
 def index():
@@ -111,8 +128,13 @@ def get_current_serial():
 def update_prefix():
     global SERIAL_PREFIX, current_number
     payload = request.get_json()
-    SERIAL_PREFIX = payload.get('prefix', SERIAL_PREFIX)
-    current_number = int(payload.get('number', current_number))  # Ensure number is an integer
+    
+    # Only update if values are provided in the payload
+    if 'prefix' in payload and payload['prefix']:
+        SERIAL_PREFIX = payload['prefix']
+    if 'number' in payload and payload['number'] is not None:
+        current_number = int(payload['number'])
+    
     return jsonify({
         "status": "success",
         "prefix": SERIAL_PREFIX,

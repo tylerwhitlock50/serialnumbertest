@@ -168,8 +168,18 @@
         }
 
         function updateConfig() {
-            const prefix = document.getElementById('prefix').value;
+            const prefix = document.getElementById('prefix').value.trim();
             const number = parseInt(document.getElementById('number').value);
+
+            // Validate inputs
+            if (!prefix) {
+                showStatus('Please enter a valid prefix', 'error');
+                return;
+            }
+            if (isNaN(number) || number < 0) {
+                showStatus('Please enter a valid number', 'error');
+                return;
+            }
 
             fetch('/update-prefix', {
                 method: 'POST',
