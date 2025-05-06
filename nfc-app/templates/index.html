@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NFC Serial Number Writer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .serial-display {
+            font-size: 36px;
+            margin: 20px 0;
+            color: #4CAF50;
+            font-family: monospace;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .info {
+            background-color: #d9edf7;
+            color: #31708f;
+            margin-bottom: 20px;
+        }
+        .instructions {
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .config-panel {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            text-align: left;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        input {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .url-display {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <h1>NFC Serial Number Writer</h1>
+    
+    <div class="config-panel">
+        <h3>Configuration</h3>
+        <div class="form-group">
+            <label for="prefix">Serial Prefix:</label>
+            <input type="text" id="prefix" value="{{ serial_prefix }}" placeholder="e.g., A451">
+        </div>
+        <div class="form-group">
+            <label for="number">Start Number:</label>
+            <input type="number" id="number" value="{{ current_number }}" min="0">
+        </div>
+        <button onclick="updateConfig()">Update Configuration</button>
+    </div>
+
+    <div class="serial-display" id="current-serial">A451000000</div>
+    <div class="url-display" id="current-url">http://10.207.24.120/test?serialnumber=A451000000</div>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Configure the serial number prefix and starting number above</li>
+            <li>Touch an NFC card to the reader</li>
+            <li>The next serial number will be written to the card</li>
+            <li>The card will contain both the serial number and the URL</li>
+        </ol>
+    </div>
+    
+    <div class="status info" id="status">Waiting for NFC card...</div>
+
+    <script>
+        function updateSerialDisplay() {
+            fetch('/get-current-serial')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('current-serial').textContent = data.serial;
+                    document.getElementById('current-url').textContent = 
+                        `{{ base_url }}?serialnumber=${data.serial}`;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        function updateConfig() {
+            const prefix = document.getElementById('prefix').value;
+            const number = parseInt(document.getElementById('number').value);
+            
+            fetch('/update-prefix', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    prefix: prefix,
+                    number: number
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                updateSerialDisplay();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        // Update display every second
+        setInterval(updateSerialDisplay, 1000);
+        
+        // Initial update
+        updateSerialDisplay();
+    </script>
+</body>
+</html> 
