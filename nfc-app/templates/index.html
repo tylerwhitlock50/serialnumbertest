@@ -195,7 +195,7 @@
                 return;
             }
 
-            fetch('/update-prefix', {
+            fetch('/update-config', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -207,8 +207,16 @@
             })
             .then(response => response.json())
             .then(data => {
-                showStatus('Configuration updated successfully', 'success');
-                updateSerialDisplay();
+                if (data.status === 'success') {
+                    showStatus('Configuration updated successfully', 'success');
+                    // Update the display with the new values
+                    document.getElementById('prefix').value = data.prefix;
+                    document.getElementById('number').value = data.number;
+                    // Force an immediate update of the serial display
+                    updateSerialDisplay();
+                } else {
+                    showStatus(data.message || 'Error updating configuration', 'error');
+                }
             })
             .catch(error => {
                 console.error('Error:', error);

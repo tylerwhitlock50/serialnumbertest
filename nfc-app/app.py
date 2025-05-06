@@ -21,12 +21,42 @@ reader_active = False
 def reset_nfc_reader():
     """Attempt to reset the NFC reader hardware."""
     try:
-        # Try to reset the USB device (you may need to adjust the device ID)
-        subprocess.run(['sudo', 'usbreset', '0x072f:0x2200'], check=False)
-        print("✓ NFC reader hardware reset attempted")
+        # Method 1: Try usbreset with the correct device ID
+        subprocess.run(['sudo', 'usbreset', '072f:2200'], check=False)
+        print("✓ NFC reader hardware reset attempted via usbreset")
         time.sleep(2)  # Give the device time to reset
+
+        # Method 2: Try to reset via libusb if available
+        try:
+            import usb.core
+            import usb.util
+            # Find the device
+            device = usb.core.find(idVendor=0x072f, idProduct=0x2200)
+            if device:
+                # Reset the device
+                device.reset()
+                print("✓ NFC reader hardware reset attempted via libusb")
+                time.sleep(2)
+        except ImportError:
+            print("→ libusb not available, skipping libusb reset method")
+        except Exception as e:
+            print(f"→ libusb reset failed: {str(e)}")
+
+        # Method 3: Try to reset via udev if available
+        try:
+            subprocess.run(['sudo', 'udevadm', 'trigger', '--action=remove', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
+            time.sleep(1)
+            subprocess.run(['sudo', 'udevadm', 'trigger', '--action=add', '--subsystem-match=usb', '--attr-match=idVendor=072f', '--attr-match=idProduct=2200'], check=False)
+            print("✓ NFC reader hardware reset attempted via udev")
+            time.sleep(2)
+        except Exception as e:
+            print(f"→ udev reset failed: {str(e)}")
+
+        print("✓ Reset sequence completed")
+        return True
     except Exception as e:
         print("✗ Hardware reset failed:", str(e))
+        return False
 
 def watchdog_thread():
     """Monitor NFC reader activity and reset if necessary."""
@@ -129,8 +159,8 @@ def nfc_reader_thread():
                     print("Error during tag operation:", str(e))
                     time.sleep(0.5)
                     continue
-        except nfc.clf.NoSuchDeviceError:
-            print("No reader found; retrying in 1s…")
+        except IOError as e:
+            print("No reader found or device error; retrying in 1s…", str(e))
             reader_active = False
             time.sleep(1)
         except Exception as e:
@@ -165,22 +195,48 @@ def get_current_serial():
         "product_data": data
     })
 
-@app.route('/update-prefix', methods=['POST'])
-def update_prefix():
+@app.route('/update-config', methods=['POST'])
+def update_config():
     global SERIAL_PREFIX, current_number
-    payload = request.get_json()
-    
-    # Only update if values are provided in the payload
-    if 'prefix' in payload and payload['prefix']:
-        SERIAL_PREFIX = payload['prefix']
-    if 'number' in payload and payload['number'] is not None:
-        current_number = int(payload['number'])
-    
-    return jsonify({
-        "status": "success",
-        "prefix": SERIAL_PREFIX,
-        "number": current_number
-    })
+    try:
+        payload = request.get_json()
+        if not payload:
+            return jsonify({
+                "status": "error",
+                "message": "No data provided"
+            }), 400
+
+        # Update prefix if provided
+        if 'prefix' in payload and payload['prefix']:
+            SERIAL_PREFIX = str(payload['prefix']).strip()
+            print(f"Updated prefix to: {SERIAL_PREFIX}")
+
+        # Update number if provided
+        if 'number' in payload and payload['number'] is not None:
+            try:
+                current_number = int(payload['number'])
+                print(f"Updated current number to: {current_number}")
+            except ValueError:
+                return jsonify({
+                    "status": "error",
+                    "message": "Invalid number format"
+                }), 400
+
+        # Generate a new serial to verify the update
+        test_serial = generate_serial_number()
+        
+        return jsonify({
+            "status": "success",
+            "prefix": SERIAL_PREFIX,
+            "number": current_number,
+            "test_serial": test_serial
+        })
+    except Exception as e:
+        print(f"Error updating configuration: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 @app.route('/reset-reader', methods=['POST'])
 def reset_reader():
